@@ -41,6 +41,14 @@ import (
 )
 
 func TestAcmeOrdersController(t *testing.T) {
+	for _, challengeType := range []string{"dns-01", "dns-account-01"} {
+		t.Run(challengeType, func(t *testing.T) {
+			testAcmeOrdersController(t, challengeType)
+		})
+	}
+}
+
+func testAcmeOrdersController(t *testing.T, challengeType string) {
 	config, stopFn := framework.RunControlPlane(t)
 	t.Cleanup(stopFn)
 
@@ -50,9 +58,8 @@ func TestAcmeOrdersController(t *testing.T) {
 
 	// some test values
 	var (
-		testName      = "acmetest"
-		challengeType = "dns-01"
-		authType      = "dns"
+		testName = "acmetest"
+		authType = "dns"
 	)
 
 	// Initial ACME authorization to be returned by GetAuthorization.

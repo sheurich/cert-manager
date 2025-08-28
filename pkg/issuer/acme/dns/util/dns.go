@@ -36,12 +36,18 @@ func DNS01LookupFQDN(ctx context.Context, domain string, followCNAME bool, names
 	return fqdn, nil
 }
 
+// DNSAccount01Label returns the account-scoped label used for dns-account-01 challenges.
+// The label is the first 10 bytes of the SHA-256 sum of the account URL, base32
+// encoded without padding and in lowercase.
+func DNSAccount01Label(accountURL string) string {
+	sum := sha256.Sum256([]byte(accountURL))
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:10]))
+}
+
 // DNSAccount01LookupFQDN returns the FQDN for a dns-account-01 challenge.
 // The accountURL is the ACME account identifier used to generate the label.
 func DNSAccount01LookupFQDN(ctx context.Context, domain, accountURL string, followCNAME bool, nameservers ...string) (string, error) {
-	sum := sha256.Sum256([]byte(accountURL))
-	// Use first 10 bytes and base32 encode without padding, lowercase
-	label := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:10]))
+	label := DNSAccount01Label(accountURL)
 	fqdn := fmt.Sprintf("_%s._acme-challenge.%s.", label, domain)
 
 	if followCNAME {
