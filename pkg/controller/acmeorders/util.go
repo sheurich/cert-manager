@@ -293,6 +293,8 @@ func challengeType(t string) (cmacme.ACMEChallengeType, error) {
 		return cmacme.ACMEChallengeTypeHTTP01, nil
 	case "dns-01":
 		return cmacme.ACMEChallengeTypeDNS01, nil
+	case "dns-account-01":
+		return cmacme.ACMEChallengeTypeDNSAccount01, nil
 	default:
 		return "", fmt.Errorf("unsupported challenge type: %v", t)
 	}
@@ -333,7 +335,7 @@ func ensureKeysForChallenges(cl acmecl.Interface, challenges []*cmacme.Challenge
 		switch ch.Spec.Type {
 		case cmacme.ACMEChallengeTypeHTTP01:
 			key, err = cl.HTTP01ChallengeResponse(ch.Spec.Token)
-		case cmacme.ACMEChallengeTypeDNS01:
+		case cmacme.ACMEChallengeTypeDNS01, cmacme.ACMEChallengeTypeDNSAccount01:
 			key, err = cl.DNS01ChallengeRecord(ch.Spec.Token)
 		default:
 			return nil, fmt.Errorf("challenge %s has unsupported challenge type: %s", ch.Name, ch.Spec.Type)

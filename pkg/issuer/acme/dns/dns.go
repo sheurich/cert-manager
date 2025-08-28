@@ -82,7 +82,7 @@ func (s *Solver) Present(ctx context.Context, issuer v1.GenericIssuer, ch *cmacm
 	log := logf.WithResource(logf.FromContext(ctx, "Present"), ch).WithValues("domain", ch.Spec.DNSName)
 	ctx = logf.NewContext(ctx, log)
 
-	webhookSolver, req, err := s.prepareChallengeRequest(ctx, ch)
+	webhookSolver, req, err := s.prepareChallengeRequest(ctx, issuer, ch)
 	if err != nil && err != errNotFound {
 		return err
 	}
@@ -96,7 +96,16 @@ func (s *Solver) Present(ctx context.Context, issuer v1.GenericIssuer, ch *cmacm
 		return err
 	}
 
-	fqdn, err := util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, followCNAME(providerConfig.CNAMEStrategy), s.DNS01Nameservers...)
+	accountURI := ""
+	if acmeStatus := issuer.GetStatus().ACMEStatus(); acmeStatus != nil {
+		accountURI = acmeStatus.URI
+	}
+	var fqdn string
+	if ch.Spec.Type == cmacme.ACMEChallengeTypeDNSAccount01 {
+		fqdn, err = util.DNSAccount01LookupFQDN(ctx, ch.Spec.DNSName, accountURI, followCNAME(providerConfig.CNAMEStrategy), s.DNS01Nameservers...)
+	} else {
+		fqdn, err = util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, followCNAME(providerConfig.CNAMEStrategy), s.DNS01Nameservers...)
+	}
 	if err != nil {
 		return err
 	}
@@ -110,7 +119,17 @@ func (s *Solver) Present(ctx context.Context, issuer v1.GenericIssuer, ch *cmacm
 func (s *Solver) Check(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error {
 	log := logf.WithResource(logf.FromContext(ctx, "Check"), ch).WithValues("domain", ch.Spec.DNSName)
 
-	fqdn, err := util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, false, s.DNS01Nameservers...)
+	accountURI := ""
+	if acmeStatus := issuer.GetStatus().ACMEStatus(); acmeStatus != nil {
+		accountURI = acmeStatus.URI
+	}
+	var fqdn string
+	var err error
+	if ch.Spec.Type == cmacme.ACMEChallengeTypeDNSAccount01 {
+		fqdn, err = util.DNSAccount01LookupFQDN(ctx, ch.Spec.DNSName, accountURI, false, s.DNS01Nameservers...)
+	} else {
+		fqdn, err = util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, false, s.DNS01Nameservers...)
+	}
 	if err != nil {
 		return err
 	}
@@ -136,11 +155,11 @@ func (s *Solver) Check(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.
 
 // CleanUp removes DNS records which are no longer needed after
 // certificate issuance.
-func (s *Solver) CleanUp(ctx context.Context, ch *cmacme.Challenge) error {
+func (s *Solver) CleanUp(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error {
 	log := logf.WithResource(logf.FromContext(ctx, "CleanUp"), ch).WithValues("domain", ch.Spec.DNSName)
 	ctx = logf.NewContext(ctx, log)
 
-	webhookSolver, req, err := s.prepareChallengeRequest(ctx, ch)
+	webhookSolver, req, err := s.prepareChallengeRequest(ctx, issuer, ch)
 	if err != nil && err != errNotFound {
 		return err
 	}
@@ -154,7 +173,16 @@ func (s *Solver) CleanUp(ctx context.Context, ch *cmacme.Challenge) error {
 		return err
 	}
 
-	fqdn, err := util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, followCNAME(providerConfig.CNAMEStrategy), s.DNS01Nameservers...)
+	accountURI := ""
+	if acmeStatus := issuer.GetStatus().ACMEStatus(); acmeStatus != nil {
+		accountURI = acmeStatus.URI
+	}
+	var fqdn string
+	if ch.Spec.Type == cmacme.ACMEChallengeTypeDNSAccount01 {
+		fqdn, err = util.DNSAccount01LookupFQDN(ctx, ch.Spec.DNSName, accountURI, followCNAME(providerConfig.CNAMEStrategy), s.DNS01Nameservers...)
+	} else {
+		fqdn, err = util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, followCNAME(providerConfig.CNAMEStrategy), s.DNS01Nameservers...)
+	}
 	if err != nil {
 		return err
 	}
@@ -439,7 +467,7 @@ func (s *Solver) solverForChallenge(ctx context.Context, ch *cmacme.Challenge) (
 	return impl, providerConfig, nil
 }
 
-func (s *Solver) prepareChallengeRequest(ctx context.Context, ch *cmacme.Challenge) (webhook.Solver, *whapi.ChallengeRequest, error) {
+func (s *Solver) prepareChallengeRequest(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) (webhook.Solver, *whapi.ChallengeRequest, error) {
 	dns01Config, err := extractChallengeSolverConfig(ch)
 	if err != nil {
 		return nil, nil, err
@@ -450,7 +478,16 @@ func (s *Solver) prepareChallengeRequest(ctx context.Context, ch *cmacme.Challen
 		return nil, nil, err
 	}
 
-	fqdn, err := util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, followCNAME(dns01Config.CNAMEStrategy), s.DNS01Nameservers...)
+	accountURI := ""
+	if acmeStatus := issuer.GetStatus().ACMEStatus(); acmeStatus != nil {
+		accountURI = acmeStatus.URI
+	}
+	var fqdn string
+	if ch.Spec.Type == cmacme.ACMEChallengeTypeDNSAccount01 {
+		fqdn, err = util.DNSAccount01LookupFQDN(ctx, ch.Spec.DNSName, accountURI, followCNAME(dns01Config.CNAMEStrategy), s.DNS01Nameservers...)
+	} else {
+		fqdn, err = util.DNS01LookupFQDN(ctx, ch.Spec.DNSName, followCNAME(dns01Config.CNAMEStrategy), s.DNS01Nameservers...)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -471,8 +508,12 @@ func (s *Solver) prepareChallengeRequest(ctx context.Context, ch *cmacme.Challen
 		return nil, nil, err
 	}
 
+	reqType := "dns-01"
+	if ch.Spec.Type == cmacme.ACMEChallengeTypeDNSAccount01 {
+		reqType = "dns-account-01"
+	}
 	req := &whapi.ChallengeRequest{
-		Type:                    "dns-01",
+		Type:                    reqType,
 		ResolvedFQDN:            fqdn,
 		ResolvedZone:            zone,
 		AllowAmbientCredentials: canUseAmbientCredentials,

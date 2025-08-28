@@ -52,14 +52,14 @@ func (f *fakeSolver) Check(ctx context.Context, issuer v1.GenericIssuer, ch *cma
 // CleanUp will remove challenge records for a given solver.
 // This may involve deleting resources in the Kubernetes API Server, or
 // communicating with other external components (e.g., DNS providers).
-func (f *fakeSolver) CleanUp(ctx context.Context, ch *cmacme.Challenge) error {
-	return f.fakeCleanUp(ctx, ch)
+func (f *fakeSolver) CleanUp(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error {
+	return f.fakeCleanUp(ctx, issuer, ch)
 }
 
 type fakeSolver struct {
 	fakePresent func(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error
 	fakeCheck   func(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error
-	fakeCleanUp func(ctx context.Context, ch *cmacme.Challenge) error
+	fakeCleanUp func(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error
 }
 
 type testT struct {
@@ -99,7 +99,7 @@ func TestSyncHappyPath(t *testing.T) {
 				gen.SetChallengeType(cmacme.ACMEChallengeTypeHTTP01),
 			),
 			httpSolver: &fakeSolver{
-				fakeCleanUp: func(ctx context.Context, ch *cmacme.Challenge) error {
+				fakeCleanUp: func(ctx context.Context, _ v1.GenericIssuer, ch *cmacme.Challenge) error {
 					return nil
 				},
 			},
@@ -131,7 +131,7 @@ func TestSyncHappyPath(t *testing.T) {
 				gen.SetChallengeType(cmacme.ACMEChallengeTypeHTTP01),
 			),
 			httpSolver: &fakeSolver{
-				fakeCleanUp: func(context.Context, *cmacme.Challenge) error {
+				fakeCleanUp: func(ctx context.Context, _ v1.GenericIssuer, _ *cmacme.Challenge) error {
 					return simulatedCleanupError
 				},
 			},
@@ -344,7 +344,7 @@ func TestSyncHappyPath(t *testing.T) {
 				fakeCheck: func(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error {
 					return nil
 				},
-				fakeCleanUp: func(context.Context, *cmacme.Challenge) error {
+				fakeCleanUp: func(ctx context.Context, _ v1.GenericIssuer, _ *cmacme.Challenge) error {
 					return nil
 				},
 			},
@@ -399,7 +399,7 @@ func TestSyncHappyPath(t *testing.T) {
 				fakeCheck: func(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error {
 					return nil
 				},
-				fakeCleanUp: func(context.Context, *cmacme.Challenge) error {
+				fakeCleanUp: func(ctx context.Context, _ v1.GenericIssuer, _ *cmacme.Challenge) error {
 					return nil
 				},
 			},
@@ -458,7 +458,7 @@ func TestSyncHappyPath(t *testing.T) {
 				fakeCheck: func(ctx context.Context, issuer v1.GenericIssuer, ch *cmacme.Challenge) error {
 					return nil
 				},
-				fakeCleanUp: func(context.Context, *cmacme.Challenge) error {
+				fakeCleanUp: func(ctx context.Context, _ v1.GenericIssuer, _ *cmacme.Challenge) error {
 					return nil
 				},
 			},
@@ -518,7 +518,7 @@ func TestSyncHappyPath(t *testing.T) {
 				gen.SetChallengePresented(true),
 			),
 			httpSolver: &fakeSolver{
-				fakeCleanUp: func(context.Context, *cmacme.Challenge) error {
+				fakeCleanUp: func(ctx context.Context, _ v1.GenericIssuer, _ *cmacme.Challenge) error {
 					return nil
 				},
 			},
@@ -553,7 +553,7 @@ func TestSyncHappyPath(t *testing.T) {
 				gen.SetChallengePresented(true),
 			),
 			httpSolver: &fakeSolver{
-				fakeCleanUp: func(context.Context, *cmacme.Challenge) error {
+				fakeCleanUp: func(ctx context.Context, _ v1.GenericIssuer, _ *cmacme.Challenge) error {
 					return nil
 				},
 			},

@@ -90,7 +90,7 @@ type ChallengeSpec struct {
 	IssuerRef cmmeta.IssuerReference
 }
 
-// The type of ACME challenge. Only HTTP-01 and DNS-01 are supported.
+// The type of ACME challenge. Only HTTP-01, DNS-01 and DNS-ACCOUNT-01 are supported.
 type ACMEChallengeType string
 
 const (
@@ -101,6 +101,10 @@ const (
 	// ACMEChallengeTypeDNS01 denotes a Challenge is of type dns-01
 	// More info: https://letsencrypt.org/docs/challenge-types/#dns-01-challenge
 	ACMEChallengeTypeDNS01 ACMEChallengeType = "DNS-01"
+
+	// ACMEChallengeTypeDNSAccount01 denotes a Challenge is of type dns-account-01
+	// More info: https://datatracker.ietf.org/doc/html/draft-ietf-acme-dns-account-challenge
+	ACMEChallengeTypeDNSAccount01 ACMEChallengeType = "DNS-ACCOUNT-01"
 )
 
 type ChallengeStatus struct {

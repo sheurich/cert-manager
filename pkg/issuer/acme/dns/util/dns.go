@@ -10,7 +10,10 @@ package util
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base32"
 	"fmt"
+	"strings"
 
 	"github.com/miekg/dns"
 )
@@ -22,6 +25,25 @@ func DNS01LookupFQDN(ctx context.Context, domain string, followCNAME bool, names
 	fqdn := fmt.Sprintf("_acme-challenge.%s.", domain)
 
 	// Check if the domain has CNAME then return that
+	if followCNAME {
+		var err error
+		fqdn, err = followCNAMEs(ctx, fqdn, nameservers)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return fqdn, nil
+}
+
+// DNSAccount01LookupFQDN returns the FQDN for a dns-account-01 challenge.
+// The accountURL is the ACME account identifier used to generate the label.
+func DNSAccount01LookupFQDN(ctx context.Context, domain, accountURL string, followCNAME bool, nameservers ...string) (string, error) {
+	sum := sha256.Sum256([]byte(accountURL))
+	// Use first 10 bytes and base32 encode without padding, lowercase
+	label := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:10]))
+	fqdn := fmt.Sprintf("_%s._acme-challenge.%s.", label, domain)
+
 	if followCNAME {
 		var err error
 		fqdn, err = followCNAMEs(ctx, fqdn, nameservers)
