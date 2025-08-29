@@ -41,7 +41,7 @@ func DNS01LookupFQDN(ctx context.Context, domain string, followCNAME bool, names
 // encoded without padding and in lowercase.
 func DNSAccount01Label(accountURL string) string {
 	sum := sha256.Sum256([]byte(accountURL))
-	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:10]))
+	return strings.ToLower(base32.StdEncoding.EncodeToString(sum[:10]))
 }
 
 // DNSAccount01LookupFQDN returns the FQDN for a dns-account-01 challenge.

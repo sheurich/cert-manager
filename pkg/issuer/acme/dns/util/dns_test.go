@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"testing"
 
 	"github.com/miekg/dns"
@@ -12,10 +11,10 @@ import (
 
 func TestDNSAccount01Label(t *testing.T) {
 	accountURL := "https://example.com/acme/acct/ExampleAccount"
-	want := "UJMMOVF2VN55TGYE"
+	want := "ujmmovf2vn55tgye"
 	got := DNSAccount01Label(accountURL)
-	if strings.ToUpper(got) != want {
-		t.Fatalf("expected %s, got %s", strings.ToLower(want), got)
+	if got != want {
+		t.Fatalf("expected %s, got %s", want, got)
 	}
 }
 
@@ -95,6 +94,37 @@ func TestLookupFQDNCNAME(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("expected %s, got %s", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestFindBestMatch(t *testing.T) {
+	domains := []string{
+		"foo.example.com",
+		"foo.bar.example.com",
+		"example.com",
+		"baz.com",
+	}
+	tests := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{name: "exact match tld", query: "example.com", want: "example.com"},
+		{name: "exact match subdomain", query: "foo.example.com", want: "foo.example.com"},
+		{name: "exact match subdomain two levels", query: "foo.bar.example.com", want: "foo.bar.example.com"},
+		{name: "partial match tld", query: "baz.example.com", want: "example.com"},
+		{name: "partial match subdomain", query: "baz.foo.example.com", want: "foo.example.com"},
+		{name: "no match reversed order", query: "com.example.foo", want: ""},
+		{name: "no matches", query: "bar.com", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _ := FindBestMatch(tt.query, domains...)
+			if got != tt.want {
+				t.Fatalf("query %s: expected %s, got %s", tt.query, tt.want, got)
 			}
 		})
 	}
