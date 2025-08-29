@@ -182,7 +182,7 @@ func schema_webhook_apis_acme_v1alpha1_ChallengeRequest(ref common.ReferenceCall
 					},
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Type is the type of ACME challenge. Only dns-01 is currently supported.",
+                                                    Description: "Type is the type of ACME challenge. Only dns-01 and dns-account-01 are currently supported.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",

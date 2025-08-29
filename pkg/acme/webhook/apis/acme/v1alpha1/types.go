@@ -55,7 +55,7 @@ type ChallengeRequest struct {
 	Action ChallengeAction `json:"action"`
 
 	// Type is the type of ACME challenge.
-	// Only dns-01 is currently supported.
+	// Only dns-01 and dns-account-01 are currently supported.
 	Type string `json:"type"`
 
 	// DNSName is the name of the domain that is actually being validated, as

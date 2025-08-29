@@ -1302,6 +1302,17 @@ func Test_ensureKeysForChallenges(t *testing.T) {
 				gen.ChallengeFrom(barChallenge, gen.SetChallengeType(cmacme.ACMEChallengeTypeDNS01),
 					gen.SetChallengeKey("barKeyDNS01"))},
 		},
+		"happy path with some dns-account-01 challenges": {
+			acmeClient: basicACMEClient,
+			partialChallenges: []*cmacme.Challenge{
+				gen.ChallengeFrom(fooChallenge, gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSAccount01)),
+				gen.ChallengeFrom(barChallenge, gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSAccount01))},
+			want: []*cmacme.Challenge{
+				gen.ChallengeFrom(fooChallenge, gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSAccount01),
+					gen.SetChallengeKey("fooKeyDNS01")),
+				gen.ChallengeFrom(barChallenge, gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSAccount01),
+					gen.SetChallengeKey("barKeyDNS01"))},
+		},
 		"unhappy path with an unknown challenge type": {
 			acmeClient:        basicACMEClient,
 			partialChallenges: []*cmacme.Challenge{gen.ChallengeFrom(fooChallenge, gen.SetChallengeType(cmacme.ACMEChallengeType("foo")))},
@@ -1319,5 +1330,15 @@ func Test_ensureKeysForChallenges(t *testing.T) {
 				t.Errorf("ensureKeysForChallenges() = %v, want %v", got, scenario.want)
 			}
 		})
+	}
+}
+
+func TestChallengeType(t *testing.T) {
+	got, err := challengeType("dns-account-01")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != cmacme.ACMEChallengeTypeDNSAccount01 {
+		t.Fatalf("expected %v, got %v", cmacme.ACMEChallengeTypeDNSAccount01, got)
 	}
 }

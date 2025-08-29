@@ -57,7 +57,7 @@ type solver interface {
 	// CleanUp will remove challenge records for a given solver.
 	// This may involve deleting resources in the Kubernetes API Server, or
 	// communicating with other external components (e.g., DNS providers).
-	CleanUp(ctx context.Context, ch *cmacme.Challenge) error
+	CleanUp(ctx context.Context, issuer cmapi.GenericIssuer, ch *cmacme.Challenge) error
 }
 
 // Sync will process this ACME Challenge.
@@ -115,7 +115,7 @@ func (c *controller) Sync(ctx context.Context, chOriginal *cmacme.Challenge) (er
 				return err
 			}
 
-			err = solver.CleanUp(ctx, ch)
+			err = solver.CleanUp(ctx, genericIssuer, ch)
 			if err != nil {
 				c.recorder.Eventf(ch, corev1.EventTypeWarning, reasonCleanUpError, "Error cleaning up challenge: %v", err)
 				ch.Status.Reason = err.Error()
@@ -259,7 +259,13 @@ func (c *controller) handleFinalizer(ctx context.Context, ch *cmacme.Challenge) 
 		return nil
 	}
 
-	err = solver.CleanUp(ctx, ch)
+	issuerObj, err := c.helper.GetGenericIssuer(ch.Spec.IssuerRef, ch.Namespace)
+	if err != nil {
+		log.Error(err, "error reading (cluster)issuer for cleanup")
+		return nil
+	}
+
+	err = solver.CleanUp(ctx, issuerObj, ch)
 	if err != nil {
 		c.recorder.Eventf(ch, corev1.EventTypeWarning, reasonCleanUpError, "Error cleaning up challenge: %v", err)
 		ch.Status.Reason = err.Error()
@@ -405,6 +411,8 @@ func (c *controller) solverFor(challengeType cmacme.ACMEChallengeType) (solver, 
 	case cmacme.ACMEChallengeTypeHTTP01:
 		return c.httpSolver, nil
 	case cmacme.ACMEChallengeTypeDNS01:
+		return c.dnsSolver, nil
+	case cmacme.ACMEChallengeTypeDNSAccount01:
 		return c.dnsSolver, nil
 	}
 	return nil, fmt.Errorf("no solver for %q implemented", challengeType)
