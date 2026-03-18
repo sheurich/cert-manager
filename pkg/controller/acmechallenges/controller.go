@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
 	internalinformers "github.com/cert-manager/cert-manager/internal/informers"
 	"github.com/cert-manager/cert-manager/pkg/acme/accounts"
 	cmacmelisters "github.com/cert-manager/cert-manager/pkg/client/listers/acme/v1"
@@ -37,8 +38,10 @@ import (
 	"github.com/cert-manager/cert-manager/pkg/controller/acmechallenges/scheduler"
 	"github.com/cert-manager/cert-manager/pkg/issuer"
 	"github.com/cert-manager/cert-manager/pkg/issuer/acme/dns"
+	"github.com/cert-manager/cert-manager/pkg/issuer/acme/dnspersist"
 	"github.com/cert-manager/cert-manager/pkg/issuer/acme/http"
 	logf "github.com/cert-manager/cert-manager/pkg/logs"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
 )
 
 type controller struct {
@@ -57,8 +60,9 @@ type controller struct {
 	// ACME challenge solvers are instantiated once at the time of controller
 	// construction.
 	// This also allows for easy mocking of the different challenge mechanisms.
-	dnsSolver  solver
-	httpSolver solver
+	dnsSolver        solver
+	dnsPersistSolver solver
+	httpSolver       solver
 	// scheduler marks challenges as Processing=true if they can be scheduled
 	// for processing. This job runs periodically every N seconds, so it cannot
 	// be constructed as a traditional controller.
@@ -152,6 +156,12 @@ func (c *controller) Register(ctx *controllerpkg.Context) (workqueue.TypedRateLi
 	c.dnsSolver, err = dns.NewSolver(ctx)
 	if err != nil {
 		return nil, nil, err
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(feature.ACMEDNSPersist01) {
+		c.dnsPersistSolver, err = dnspersist.NewSolver(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// read options from context

@@ -19,17 +19,20 @@ package acmeorders
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	gwapi "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
 	"github.com/cert-manager/cert-manager/pkg/acme"
 	acmecl "github.com/cert-manager/cert-manager/pkg/acme/client"
 	"github.com/cert-manager/cert-manager/pkg/api/util"
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	logf "github.com/cert-manager/cert-manager/pkg/logs"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
 	"github.com/cert-manager/cert-manager/pkg/util/solverpicker"
 )
 
@@ -145,11 +148,13 @@ func partialChallengeSpecForAuthorization(ctx context.Context, issuer cmapi.Gene
 
 	// 6. construct Challenge resource with spec.solver field set
 	return &cmacme.ChallengeSpec{
-		AuthorizationURL: authz.URL,
-		Type:             chType,
-		URL:              selectedChallenge.URL,
-		DNSName:          authz.Identifier,
-		Token:            selectedChallenge.Token,
+		AuthorizationURL:  authz.URL,
+		Type:              chType,
+		URL:               selectedChallenge.URL,
+		DNSName:           authz.Identifier,
+		Token:             selectedChallenge.Token,
+		IssuerDomainNames: selectedChallenge.IssuerDomainNames,
+		AccountURI:        selectedChallenge.AccountURI,
 		// selectedSolver cannot be nil due to the check above.
 		Solver:    *selectedSolver,
 		Wildcard:  wc,
@@ -163,6 +168,11 @@ func challengeType(t string) (cmacme.ACMEChallengeType, error) {
 		return cmacme.ACMEChallengeTypeHTTP01, nil
 	case "dns-01":
 		return cmacme.ACMEChallengeTypeDNS01, nil
+	case "dns-persist-01":
+		if !utilfeature.DefaultFeatureGate.Enabled(feature.ACMEDNSPersist01) {
+			return "", fmt.Errorf("unsupported challenge type: %v (dns-persist-01 feature gate not enabled)", t)
+		}
+		return cmacme.ACMEChallengeTypeDNSPersist01, nil
 	default:
 		return "", fmt.Errorf("unsupported challenge type: %v", t)
 	}
@@ -254,7 +264,8 @@ func applyGatewayAPIAnnotationParentRefOverride(o *cmacme.Order, s *cmacme.ACMEC
 	return nil
 }
 
-func ensureKeysForChallenges(cl acmecl.Interface, challenges []*cmacme.Challenge) ([]*cmacme.Challenge, error) {
+func ensureKeysForChallenges(cl acmecl.Interface, challenges []*cmacme.Challenge, issuerAccountURI string) ([]*cmacme.Challenge, error) {
+	log := logf.Log.WithName("ensureKeysForChallenges")
 	for _, ch := range challenges {
 		var (
 			key string
@@ -265,6 +276,50 @@ func ensureKeysForChallenges(cl acmecl.Interface, challenges []*cmacme.Challenge
 			key, err = cl.HTTP01ChallengeResponse(ch.Spec.Token)
 		case cmacme.ACMEChallengeTypeDNS01:
 			key, err = cl.DNS01ChallengeRecord(ch.Spec.Token)
+		case cmacme.ACMEChallengeTypeDNSPersist01:
+			if !utilfeature.DefaultFeatureGate.Enabled(feature.ACMEDNSPersist01) {
+				return nil, fmt.Errorf("challenge %s has unsupported challenge type: %s (dns-persist-01 feature gate not enabled)", ch.Name, ch.Spec.Type)
+			}
+			if len(ch.Spec.IssuerDomainNames) == 0 {
+				return nil, fmt.Errorf("challenge %s has no issuer-domain-names", ch.Name)
+			}
+			// Find first non-empty issuer-domain-name for the key.
+			//
+			// Key uses the first valid entry for deterministic naming; however
+			// Check() on the solver side accepts *any* issuer-domain-name from
+			// the list because I-D §3 says validation succeeds when the TXT
+			// record matches any of the server-provided names. The asymmetry
+			// is intentional: Key drives Challenge object naming (must be
+			// stable and unique), while Check() implements the actual I-D
+			// matching semantics.
+			var issuerDomain string
+			for _, name := range ch.Spec.IssuerDomainNames {
+				if trimmed := strings.TrimSpace(name); trimmed != "" {
+					if normalized := strings.TrimSuffix(trimmed, "."); normalized != "" {
+						issuerDomain = normalized
+						break
+					}
+				}
+			}
+			if issuerDomain == "" {
+				return nil, fmt.Errorf("challenge %s has no valid issuer-domain-names; all entries are empty, whitespace, or bare dots", ch.Name)
+			}
+			// Prefer the accounturi from the challenge object (I-D §3);
+			// fall back to the issuer's registered account URI.
+			accountURI := ch.Spec.AccountURI
+			if accountURI == "" {
+				accountURI = issuerAccountURI
+			}
+			if accountURI != "" && ch.Spec.AccountURI != "" && issuerAccountURI != "" && ch.Spec.AccountURI != issuerAccountURI {
+				log.Info("WARNING: challenge accounturi differs from issuer account URI",
+					"challenge", ch.Name,
+					"challengeAccountURI", ch.Spec.AccountURI,
+					"issuerAccountURI", issuerAccountURI)
+			}
+			if accountURI == "" {
+				return nil, fmt.Errorf("challenge %s requires account URI for dns-persist-01 key", ch.Name)
+			}
+			key = fmt.Sprintf("%s; accounturi=%s", issuerDomain, accountURI)
 		default:
 			return nil, fmt.Errorf("challenge %s has unsupported challenge type: %s", ch.Name, ch.Spec.Type)
 		}

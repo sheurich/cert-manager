@@ -18,12 +18,16 @@ limitations under the License.
 
 package v1
 
+import (
+	acmev1 "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
+)
+
 // ACMEChallengeSolverApplyConfiguration represents a declarative configuration of the ACMEChallengeSolver type for use
 // with apply.
 //
 // An ACMEChallengeSolver describes how to solve ACME challenges for the issuer it is part of.
 // A selector may be provided to use different solving strategies for different DNS names.
-// Only one of HTTP01 or DNS01 must be provided.
+// Only one of HTTP01, DNS01, or DNSPersist01 must be provided.
 type ACMEChallengeSolverApplyConfiguration struct {
 	// Selector selects a set of DNSNames on the Certificate resource that
 	// should be solved using this challenge solver.
@@ -39,6 +43,9 @@ type ACMEChallengeSolverApplyConfiguration struct {
 	// Configures cert-manager to attempt to complete authorizations by
 	// performing the DNS01 challenge flow.
 	DNS01 *ACMEChallengeSolverDNS01ApplyConfiguration `json:"dns01,omitempty"`
+	// Configures cert-manager to attempt to complete authorizations by
+	// performing the dns-persist-01 challenge flow.
+	DNSPersist01 *acmev1.ACMEChallengeSolverDNSPersist01 `json:"dnsPersist01,omitempty"`
 }
 
 // ACMEChallengeSolverApplyConfiguration constructs a declarative configuration of the ACMEChallengeSolver type for use with
@@ -68,5 +75,13 @@ func (b *ACMEChallengeSolverApplyConfiguration) WithHTTP01(value *ACMEChallengeS
 // If called multiple times, the DNS01 field is set to the value of the last call.
 func (b *ACMEChallengeSolverApplyConfiguration) WithDNS01(value *ACMEChallengeSolverDNS01ApplyConfiguration) *ACMEChallengeSolverApplyConfiguration {
 	b.DNS01 = value
+	return b
+}
+
+// WithDNSPersist01 sets the DNSPersist01 field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DNSPersist01 field is set to the value of the last call.
+func (b *ACMEChallengeSolverApplyConfiguration) WithDNSPersist01(value acmev1.ACMEChallengeSolverDNSPersist01) *ACMEChallengeSolverApplyConfiguration {
+	b.DNSPersist01 = &value
 	return b
 }

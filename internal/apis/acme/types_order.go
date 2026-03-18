@@ -164,11 +164,20 @@ type ACMEChallenge struct {
 	Token string
 
 	// Type is the type of challenge being offered, e.g., 'http-01', 'dns-01',
-	// 'tls-sni-01', etc.
+	// 'dns-persist-01', 'tls-sni-01', etc.
 	// This is the raw value retrieved from the ACME server.
-	// Only 'http-01' and 'dns-01' are supported by cert-manager, other values
-	// will be ignored.
+	// Only 'http-01', 'dns-01', and 'dns-persist-01' are supported by
+	// cert-manager, other values will be ignored.
 	Type string
+
+	// IssuerDomainNames carries the issuer-domain-names from the ACME server
+	// for dns-persist-01 challenges.
+	IssuerDomainNames []string
+
+	// AccountURI is the account URI from the dns-persist-01 challenge object.
+	// The CA communicates this so the client can verify it identifies the same
+	// account. If empty, callers should fall back to the issuer's ACME status URI.
+	AccountURI string
 }
 
 // State represents the state of an ACME resource, such as an Order.

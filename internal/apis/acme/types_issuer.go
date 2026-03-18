@@ -140,7 +140,7 @@ const (
 )
 
 // Configures an issuer to solve challenges using the specified options.
-// Only one of HTTP01 or DNS01 may be provided.
+// Only one of HTTP01, DNS01, or DNSPersist01 may be provided.
 type ACMEChallengeSolver struct {
 	// Selector selects a set of DNSNames on the Certificate resource that
 	// should be solved using this challenge solver.
@@ -158,6 +158,10 @@ type ACMEChallengeSolver struct {
 	// Configures cert-manager to attempt to complete authorizations by
 	// performing the DNS01 challenge flow.
 	DNS01 *ACMEChallengeSolverDNS01
+
+	// Configures cert-manager to attempt to complete authorizations by
+	// performing the dns-persist-01 challenge flow.
+	DNSPersist01 *ACMEChallengeSolverDNSPersist01
 }
 
 // CertificateDNSNameSelector selects certificates using a label selector, and
@@ -382,6 +386,11 @@ type ACMEChallengeSolverDNS01 struct {
 	// DNS01 challenge records.
 	Webhook *ACMEIssuerDNS01ProviderWebhook
 }
+
+// ACMEChallengeSolverDNSPersist01 configures the dns-persist-01 challenge solver.
+// The dns-persist-01 solver requires no DNS provider credentials because
+// the persistent DNS TXT record is provisioned out-of-band by the user.
+type ACMEChallengeSolverDNSPersist01 struct{}
 
 type ACMEChallengeSolverHTTP01IngressPodSecurityContext struct {
 	// The SELinux context to be applied to all containers.

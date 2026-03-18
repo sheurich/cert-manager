@@ -31,6 +31,8 @@ import (
 	"github.com/cert-manager/cert-manager/internal/apis/certmanager"
 	"github.com/cert-manager/cert-manager/internal/apis/certmanager/validation/util"
 	cmmeta "github.com/cert-manager/cert-manager/internal/apis/meta"
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
 )
 
 // Validation functions for cert-manager Issuer types.
@@ -163,6 +165,16 @@ func ValidateACMEIssuerChallengeSolverConfig(sol *cmacme.ACMEChallengeSolver, fl
 		} else {
 			numProviders++
 			el = append(el, ValidateACMEChallengeSolverDNS01(sol.DNS01, fldPath.Child("dns01"))...)
+		}
+	}
+	if sol.DNSPersist01 != nil {
+		switch {
+		case !utilfeature.DefaultFeatureGate.Enabled(feature.ACMEDNSPersist01):
+			el = append(el, field.Forbidden(fldPath.Child("dnsPersist01"), "dns-persist-01 feature gate is not enabled"))
+		case numProviders > 0:
+			el = append(el, field.Forbidden(fldPath, "may not specify more than one solver type in a single solver"))
+		default:
+			numProviders++
 		}
 	}
 	if numProviders == 0 {

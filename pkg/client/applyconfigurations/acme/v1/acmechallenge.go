@@ -32,11 +32,18 @@ type ACMEChallengeApplyConfiguration struct {
 	// This is used to compute the 'key' that must also be presented.
 	Token *string `json:"token,omitempty"`
 	// Type is the type of challenge being offered, e.g., 'http-01', 'dns-01',
-	// 'tls-sni-01', etc.
+	// 'dns-persist-01', 'tls-sni-01', etc.
 	// This is the raw value retrieved from the ACME server.
-	// Only 'http-01' and 'dns-01' are supported by cert-manager, other values
-	// will be ignored.
+	// Only 'http-01', 'dns-01', and 'dns-persist-01' are supported by
+	// cert-manager, other values will be ignored.
 	Type *string `json:"type,omitempty"`
+	// IssuerDomainNames carries the issuer-domain-names from the ACME server
+	// for dns-persist-01 challenges.
+	IssuerDomainNames []string `json:"issuerDomainNames,omitempty"`
+	// AccountURI is the account URI from the dns-persist-01 challenge object.
+	// The CA communicates this so the client can verify it identifies the same
+	// account. If empty, callers should fall back to the issuer's ACME status URI.
+	AccountURI *string `json:"accountURI,omitempty"`
 }
 
 // ACMEChallengeApplyConfiguration constructs a declarative configuration of the ACMEChallenge type for use with
@@ -66,5 +73,23 @@ func (b *ACMEChallengeApplyConfiguration) WithToken(value string) *ACMEChallenge
 // If called multiple times, the Type field is set to the value of the last call.
 func (b *ACMEChallengeApplyConfiguration) WithType(value string) *ACMEChallengeApplyConfiguration {
 	b.Type = &value
+	return b
+}
+
+// WithIssuerDomainNames adds the given value to the IssuerDomainNames field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the IssuerDomainNames field.
+func (b *ACMEChallengeApplyConfiguration) WithIssuerDomainNames(values ...string) *ACMEChallengeApplyConfiguration {
+	for i := range values {
+		b.IssuerDomainNames = append(b.IssuerDomainNames, values[i])
+	}
+	return b
+}
+
+// WithAccountURI sets the AccountURI field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the AccountURI field is set to the value of the last call.
+func (b *ACMEChallengeApplyConfiguration) WithAccountURI(value string) *ACMEChallengeApplyConfiguration {
+	b.AccountURI = &value
 	return b
 }

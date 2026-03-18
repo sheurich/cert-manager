@@ -19,9 +19,11 @@ package solverpicker
 import (
 	"context"
 
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	"github.com/cert-manager/cert-manager/pkg/controller/acmeorders/selectors"
 	logf "github.com/cert-manager/cert-manager/pkg/logs"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
 )
 
 // Pick will select a solver based on the type of challenge, labels, dns names and dns zones
@@ -41,6 +43,8 @@ func Pick(ctx context.Context, domainToFind string, challenges []cmacme.ACMEChal
 			case ch.Type == "http-01" && solver.HTTP01 != nil:
 				return &ch
 			case ch.Type == "dns-01" && solver.DNS01 != nil:
+				return &ch
+			case ch.Type == "dns-persist-01" && solver.DNSPersist01 != nil && utilfeature.DefaultFeatureGate.Enabled(feature.ACMEDNSPersist01):
 				return &ch
 			}
 		}

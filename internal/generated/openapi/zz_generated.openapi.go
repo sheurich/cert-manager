@@ -39,6 +39,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallenge":                                      schema_pkg_apis_acme_v1_ACMEChallenge(ref),
 		"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolver":                                schema_pkg_apis_acme_v1_ACMEChallengeSolver(ref),
 		"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverDNS01":                           schema_pkg_apis_acme_v1_ACMEChallengeSolverDNS01(ref),
+		"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverDNSPersist01":                    schema_pkg_apis_acme_v1_ACMEChallengeSolverDNSPersist01(ref),
 		"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverHTTP01":                          schema_pkg_apis_acme_v1_ACMEChallengeSolverHTTP01(ref),
 		"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverHTTP01GatewayHTTPRoute":          schema_pkg_apis_acme_v1_ACMEChallengeSolverHTTP01GatewayHTTPRoute(ref),
 		"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverHTTP01Ingress":                   schema_pkg_apis_acme_v1_ACMEChallengeSolverHTTP01Ingress(ref),
@@ -628,8 +629,35 @@ func schema_pkg_apis_acme_v1_ACMEChallenge(ref common.ReferenceCallback) common.
 					},
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Type is the type of challenge being offered, e.g., 'http-01', 'dns-01', 'tls-sni-01', etc. This is the raw value retrieved from the ACME server. Only 'http-01' and 'dns-01' are supported by cert-manager, other values will be ignored.",
+							Description: "Type is the type of challenge being offered, e.g., 'http-01', 'dns-01', 'dns-persist-01', 'tls-sni-01', etc. This is the raw value retrieved from the ACME server. Only 'http-01', 'dns-01', and 'dns-persist-01' are supported by cert-manager, other values will be ignored.",
 							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"issuerDomainNames": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "IssuerDomainNames carries the issuer-domain-names from the ACME server for dns-persist-01 challenges.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"accountURI": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AccountURI is the account URI from the dns-persist-01 challenge object. The CA communicates this so the client can verify it identifies the same account. If empty, callers should fall back to the issuer's ACME status URI.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -645,7 +673,7 @@ func schema_pkg_apis_acme_v1_ACMEChallengeSolver(ref common.ReferenceCallback) c
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "An ACMEChallengeSolver describes how to solve ACME challenges for the issuer it is part of. A selector may be provided to use different solving strategies for different DNS names. Only one of HTTP01 or DNS01 must be provided.",
+				Description: "An ACMEChallengeSolver describes how to solve ACME challenges for the issuer it is part of. A selector may be provided to use different solving strategies for different DNS names. Only one of HTTP01, DNS01, or DNSPersist01 must be provided.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"selector": {
@@ -666,11 +694,17 @@ func schema_pkg_apis_acme_v1_ACMEChallengeSolver(ref common.ReferenceCallback) c
 							Ref:         ref("github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverDNS01"),
 						},
 					},
+					"dnsPersist01": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Configures cert-manager to attempt to complete authorizations by performing the dns-persist-01 challenge flow.",
+							Ref:         ref("github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverDNSPersist01"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverDNS01", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverHTTP01", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.CertificateDNSNameSelector"},
+			"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverDNS01", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverDNSPersist01", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEChallengeSolverHTTP01", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.CertificateDNSNameSelector"},
 	}
 }
 
@@ -747,6 +781,17 @@ func schema_pkg_apis_acme_v1_ACMEChallengeSolverDNS01(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderAcmeDNS", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderAkamai", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderAzureDNS", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderCloudDNS", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderCloudflare", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderDigitalOcean", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderRFC2136", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderRoute53", "github.com/cert-manager/cert-manager/pkg/apis/acme/v1.ACMEIssuerDNS01ProviderWebhook"},
+	}
+}
+
+func schema_pkg_apis_acme_v1_ACMEChallengeSolverDNSPersist01(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ACMEChallengeSolverDNSPersist01 configures the dns-persist-01 challenge solver. The dns-persist-01 solver requires no DNS provider credentials because the persistent DNS TXT record is provisioned out-of-band by the user.",
+				Type:        []string{"object"},
+			},
+		},
 	}
 }
 
@@ -2090,7 +2135,7 @@ func schema_pkg_apis_acme_v1_ChallengeSpec(ref common.ReferenceCallback) common.
 					},
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The type of ACME challenge this resource represents. One of \"HTTP-01\" or \"DNS-01\".",
+							Description: "The type of ACME challenge this resource represents. One of \"HTTP-01\", \"DNS-01\", or \"DNS-Persist-01\".",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -2106,7 +2151,7 @@ func schema_pkg_apis_acme_v1_ChallengeSpec(ref common.ReferenceCallback) common.
 					},
 					"key": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The ACME challenge key for this challenge For HTTP01 challenges, this is the value that must be responded with to complete the HTTP01 challenge in the format: `<private key JWK thumbprint>.<key from acme server for challenge>`. For DNS01 challenges, this is the base64 encoded SHA256 sum of the `<private key JWK thumbprint>.<key from acme server for challenge>` text that must be set as the TXT record content.",
+							Description: "The ACME challenge key for this challenge For HTTP01 challenges, this is the value that must be responded with to complete the HTTP01 challenge in the format: `<private key JWK thumbprint>.<key from acme server for challenge>`. For DNS01 challenges, this is the base64 encoded SHA256 sum of the `<private key JWK thumbprint>.<key from acme server for challenge>` text that must be set as the TXT record content. For DNS-Persist-01 challenges, this is the expected TXT record value in RFC 8659 issue-value syntax: `<issuer-domain-name>; accounturi=<account-URI>`.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",
@@ -2124,6 +2169,33 @@ func schema_pkg_apis_acme_v1_ChallengeSpec(ref common.ReferenceCallback) common.
 							Description: "References a properly configured ACME-type Issuer which should be used to create this Challenge. If the Issuer does not exist, processing will be retried. If the Issuer is not an 'ACME' Issuer, an error will be returned and the Challenge will be marked as failed.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/cert-manager/cert-manager/pkg/apis/meta/v1.IssuerReference"),
+						},
+					},
+					"issuerDomainNames": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "IssuerDomainNames carries the issuer-domain-names from the ACME server for dns-persist-01 challenges.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"accountURI": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AccountURI is the account URI from the dns-persist-01 challenge object. The CA communicates this so the client can verify it identifies the same account. If empty, callers should fall back to the issuer's ACME status URI.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 				},

@@ -62,7 +62,7 @@ type ChallengeSpec struct {
 	Wildcard bool
 
 	// The type of ACME challenge this resource represents.
-	// One of "HTTP-01" or "DNS-01".
+	// One of "HTTP-01", "DNS-01", or "DNS-Persist-01".
 	Type ACMEChallengeType
 
 	// The ACME challenge token for this challenge.
@@ -76,6 +76,9 @@ type ChallengeSpec struct {
 	// For DNS01 challenges, this is the base64 encoded SHA256 sum of the
 	// `<private key JWK thumbprint>.<key from acme server for challenge>`
 	// text that must be set as the TXT record content.
+	// For DNS-Persist-01 challenges, this is the expected TXT record value in
+	// RFC 8659 issue-value syntax:
+	// `<issuer-domain-name>; accounturi=<account-URI>`.
 	Key string
 
 	// Contains the domain solving configuration that should be used to
@@ -88,9 +91,18 @@ type ChallengeSpec struct {
 	// If the Issuer is not an 'ACME' Issuer, an error will be returned and the
 	// Challenge will be marked as failed.
 	IssuerRef cmmeta.IssuerReference
+
+	// IssuerDomainNames carries the issuer-domain-names from the ACME server
+	// for dns-persist-01 challenges.
+	IssuerDomainNames []string
+
+	// AccountURI is the account URI from the dns-persist-01 challenge object.
+	// The CA communicates this so the client can verify it identifies the same
+	// account. If empty, callers should fall back to the issuer's ACME status URI.
+	AccountURI string
 }
 
-// The type of ACME challenge. Only HTTP-01 and DNS-01 are supported.
+// The type of ACME challenge. Only HTTP-01, DNS-01, and DNS-Persist-01 are supported.
 type ACMEChallengeType string
 
 const (
@@ -101,6 +113,10 @@ const (
 	// ACMEChallengeTypeDNS01 denotes a Challenge is of type dns-01
 	// More info: https://letsencrypt.org/docs/challenge-types/#dns-01-challenge
 	ACMEChallengeTypeDNS01 ACMEChallengeType = "DNS-01"
+
+	// ACMEChallengeTypeDNSPersist01 denotes a Challenge is of type dns-persist-01
+	// More info: https://datatracker.ietf.org/doc/draft-ietf-acme-dns-persist/
+	ACMEChallengeTypeDNSPersist01 ACMEChallengeType = "DNS-Persist-01"
 )
 
 type ChallengeStatus struct {

@@ -198,6 +198,15 @@ const (
 	// self-service TLS configuration through the use of ListenerSet resources supported
 	// by GatewayAPI. This featuregate also requires GatewayAPI feature gate to be enabled.
 	ListenerSets featuregate.Feature = "ListenerSets"
+
+	// Owner: @sheurich
+	// Alpha: v1.21
+
+	// ACMEDNSPersist01 enables support for the dns-persist-01 ACME challenge type
+	// (draft-ietf-acme-dns-persist). When enabled, cert-manager can solve
+	// dns-persist-01 challenges using a no-op solver that verifies a persistent
+	// DNS TXT record provisioned out-of-band by the user.
+	ACMEDNSPersist01 featuregate.Feature = "ACMEDNSPersist01"
 )
 
 func init() {
@@ -215,6 +224,7 @@ var defaultCertManagerFeatureGates = map[featuregate.Feature]featuregate.Feature
 	ExperimentalCertificateSigningRequestControllers: {Default: false, PreRelease: featuregate.Alpha},
 	ExperimentalGatewayAPISupport:                    {Default: true, PreRelease: featuregate.Beta},
 	ListenerSets:                                     {Default: false, PreRelease: featuregate.Alpha},
+	ACMEDNSPersist01:                                 {Default: false, PreRelease: featuregate.Alpha},
 	AdditionalCertificateOutputFormats:               {Default: true, PreRelease: featuregate.GA},
 	ServerSideApply:                                  {Default: false, PreRelease: featuregate.Alpha},
 	LiteralCertificateSubject:                        {Default: true, PreRelease: featuregate.Beta},

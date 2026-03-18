@@ -40,7 +40,7 @@ type ChallengeSpecApplyConfiguration struct {
 	// for example '*.example.com'.
 	Wildcard *bool `json:"wildcard,omitempty"`
 	// The type of ACME challenge this resource represents.
-	// One of "HTTP-01" or "DNS-01".
+	// One of "HTTP-01", "DNS-01", or "DNS-Persist-01".
 	Type *acmev1.ACMEChallengeType `json:"type,omitempty"`
 	// The ACME challenge token for this challenge.
 	// This is the raw value returned from the ACME server.
@@ -52,6 +52,9 @@ type ChallengeSpecApplyConfiguration struct {
 	// For DNS01 challenges, this is the base64 encoded SHA256 sum of the
 	// `<private key JWK thumbprint>.<key from acme server for challenge>`
 	// text that must be set as the TXT record content.
+	// For DNS-Persist-01 challenges, this is the expected TXT record value in
+	// RFC 8659 issue-value syntax:
+	// `<issuer-domain-name>; accounturi=<account-URI>`.
 	Key *string `json:"key,omitempty"`
 	// Contains the domain solving configuration that should be used to
 	// solve this challenge resource.
@@ -62,6 +65,13 @@ type ChallengeSpecApplyConfiguration struct {
 	// If the Issuer is not an 'ACME' Issuer, an error will be returned and the
 	// Challenge will be marked as failed.
 	IssuerRef *metav1.IssuerReferenceApplyConfiguration `json:"issuerRef,omitempty"`
+	// IssuerDomainNames carries the issuer-domain-names from the ACME server
+	// for dns-persist-01 challenges.
+	IssuerDomainNames []string `json:"issuerDomainNames,omitempty"`
+	// AccountURI is the account URI from the dns-persist-01 challenge object.
+	// The CA communicates this so the client can verify it identifies the same
+	// account. If empty, callers should fall back to the issuer's ACME status URI.
+	AccountURI *string `json:"accountURI,omitempty"`
 }
 
 // ChallengeSpecApplyConfiguration constructs a declarative configuration of the ChallengeSpec type for use with
@@ -139,5 +149,23 @@ func (b *ChallengeSpecApplyConfiguration) WithSolver(value *ACMEChallengeSolverA
 // If called multiple times, the IssuerRef field is set to the value of the last call.
 func (b *ChallengeSpecApplyConfiguration) WithIssuerRef(value *metav1.IssuerReferenceApplyConfiguration) *ChallengeSpecApplyConfiguration {
 	b.IssuerRef = value
+	return b
+}
+
+// WithIssuerDomainNames adds the given value to the IssuerDomainNames field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the IssuerDomainNames field.
+func (b *ChallengeSpecApplyConfiguration) WithIssuerDomainNames(values ...string) *ChallengeSpecApplyConfiguration {
+	for i := range values {
+		b.IssuerDomainNames = append(b.IssuerDomainNames, values[i])
+	}
+	return b
+}
+
+// WithAccountURI sets the AccountURI field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the AccountURI field is set to the value of the last call.
+func (b *ChallengeSpecApplyConfiguration) WithAccountURI(value string) *ChallengeSpecApplyConfiguration {
+	b.AccountURI = &value
 	return b
 }

@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"net/http"
 	"time"
 
@@ -147,7 +148,11 @@ func (c *controller) Sync(ctx context.Context, o *cmacme.Order) (err error) {
 	switch {
 	case needToCreateChallenges:
 		log.V(logf.DebugLevel).Info("Creating additional Challenge resources to complete Order")
-		requiredChallenges, err = ensureKeysForChallenges(cl, requiredChallenges)
+		accountURI := ""
+		if acmeStatus := genericIssuer.GetStatus().ACMEStatus(); acmeStatus != nil {
+			accountURI = acmeStatus.URI
+		}
+		requiredChallenges, err = ensureKeysForChallenges(cl, requiredChallenges, accountURI)
 		if err != nil {
 			return err
 		}
@@ -423,6 +428,33 @@ func (c *controller) fetchMetadataForAuthorizations(ctx context.Context, o *cmac
 			authz.Challenges[i].URL = acmech.URI
 			authz.Challenges[i].Token = acmech.Token
 			authz.Challenges[i].Type = acmech.Type
+			// I-D §3: Clients MUST reject dns-persist-01 challenges where
+			// issuer-domain-names is empty or contains more than 10 entries.
+			idn := acmech.IssuerDomainNames
+			if acmech.Type == "dns-persist-01" {
+				if len(idn) == 0 {
+					return fmt.Errorf("malformed dns-persist-01 challenge: issuer-domain-names array is empty")
+				}
+				if len(idn) > 10 {
+					return fmt.Errorf("malformed dns-persist-01 challenge: issuer-domain-names has %d entries (maximum is 10)", len(idn))
+				}
+				// Validate per-item constraints before persisting to
+				// Order status. The CRD schema enforces maxLength=253,
+				// so an overlong entry from the ACME server would cause
+				// the status update to be rejected by the API server
+				// and the controller to retry indefinitely.
+				for j, name := range idn {
+					trimmed := strings.TrimSpace(name)
+					if trimmed == "" {
+						return fmt.Errorf("malformed dns-persist-01 challenge: issuer-domain-names[%d] is empty or whitespace", j)
+					}
+					if len(trimmed) > 253 {
+						return fmt.Errorf("malformed dns-persist-01 challenge: issuer-domain-names[%d] exceeds 253 characters (%d)", j, len(trimmed))
+					}
+				}
+			}
+			authz.Challenges[i].IssuerDomainNames = idn
+			authz.Challenges[i].AccountURI = acmech.AccountURI
 		}
 		o.Status.Authorizations[i] = authz
 	}
