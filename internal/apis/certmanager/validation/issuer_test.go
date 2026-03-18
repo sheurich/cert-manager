@@ -24,14 +24,17 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	featuretesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/clock"
 	"k8s.io/utils/ptr"
 	gwapi "sigs.k8s.io/gateway-api/apis/v1"
 
 	cmacme "github.com/cert-manager/cert-manager/internal/apis/acme"
 	cmapi "github.com/cert-manager/cert-manager/internal/apis/certmanager"
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
 	cmmeta "github.com/cert-manager/cert-manager/internal/apis/meta"
 	pubcmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
 	unitcrypto "github.com/cert-manager/cert-manager/test/unit/crypto"
 )
 
@@ -1926,4 +1929,83 @@ func TestUpdateValidateIssuer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateACMEIssuerDNSPersist01Config(t *testing.T) {
+	fldPath := field.NewPath("spec", "acme", "solvers").Index(0)
+
+	t.Run("dnsPersist01 accepted when gate enabled", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		solver := &cmacme.ACMEChallengeSolver{
+			DNSPersist01: &cmacme.ACMEChallengeSolverDNSPersist01{},
+		}
+		errs := ValidateACMEIssuerChallengeSolverConfig(solver, fldPath)
+		if len(errs) != 0 {
+			t.Errorf("expected no errors, got %v", errs)
+		}
+	})
+
+	t.Run("dnsPersist01 forbidden when gate disabled", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, false)
+		solver := &cmacme.ACMEChallengeSolver{
+			DNSPersist01: &cmacme.ACMEChallengeSolverDNSPersist01{},
+		}
+		errs := ValidateACMEIssuerChallengeSolverConfig(solver, fldPath)
+		// When gate is disabled, we get Forbidden for dnsPersist01 AND
+		// "no solver type configured" because the provider count stays 0.
+		if len(errs) < 1 {
+			t.Fatalf("expected at least 1 error, got %d: %v", len(errs), errs)
+		}
+		foundForbidden := false
+		for _, e := range errs {
+			if e.Type == field.ErrorTypeForbidden {
+				foundForbidden = true
+			}
+		}
+		if !foundForbidden {
+			t.Errorf("expected Forbidden error, got %v", errs)
+		}
+	})
+
+	t.Run("dnsPersist01 conflict with dns01", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		solver := &cmacme.ACMEChallengeSolver{
+			DNS01: &cmacme.ACMEChallengeSolverDNS01{
+				Cloudflare: &cmacme.ACMEIssuerDNS01ProviderCloudflare{
+					Email: "test@example.com",
+				},
+			},
+			DNSPersist01: &cmacme.ACMEChallengeSolverDNSPersist01{},
+		}
+		errs := ValidateACMEIssuerChallengeSolverConfig(solver, fldPath)
+		foundConflict := false
+		for _, e := range errs {
+			if e.Type == field.ErrorTypeForbidden {
+				foundConflict = true
+			}
+		}
+		if !foundConflict {
+			t.Errorf("expected Forbidden error for multi-solver conflict, got %v", errs)
+		}
+	})
+
+	t.Run("dnsPersist01 conflict with http01", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		solver := &cmacme.ACMEChallengeSolver{
+			HTTP01: &cmacme.ACMEChallengeSolverHTTP01{
+				Ingress: &cmacme.ACMEChallengeSolverHTTP01Ingress{Name: "test"},
+			},
+			DNSPersist01: &cmacme.ACMEChallengeSolverDNSPersist01{},
+		}
+		errs := ValidateACMEIssuerChallengeSolverConfig(solver, fldPath)
+		foundConflict := false
+		for _, e := range errs {
+			if e.Type == field.ErrorTypeForbidden {
+				foundConflict = true
+			}
+		}
+		if !foundConflict {
+			t.Errorf("expected Forbidden error for multi-solver conflict, got %v", errs)
+		}
+	})
 }
