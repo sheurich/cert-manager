@@ -454,6 +454,15 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ACMEChallenge
   map:
     fields:
+    - name: accountURI
+      type:
+        scalar: string
+    - name: issuerDomainNames
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
     - name: token
       type:
         scalar: string
@@ -472,6 +481,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: dns01
       type:
         namedType: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ACMEChallengeSolverDNS01
+    - name: dnsPersist01
+      type:
+        namedType: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ACMEChallengeSolverDNSPersist01
     - name: http01
       type:
         namedType: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ACMEChallengeSolverHTTP01
@@ -511,6 +523,18 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: webhook
       type:
         namedType: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ACMEIssuerDNS01ProviderWebhook
+- name: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ACMEChallengeSolverDNSPersist01
+  map:
+    elementType:
+      scalar: untyped
+      list:
+        elementType:
+          namedType: __untyped_atomic_
+        elementRelationship: atomic
+      map:
+        elementType:
+          namedType: __untyped_deduced_
+        elementRelationship: separable
 - name: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ACMEChallengeSolverHTTP01
   map:
     fields:
@@ -967,6 +991,9 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.cert-manager.cert-manager.pkg.apis.acme.v1.ChallengeSpec
   map:
     fields:
+    - name: accountURI
+      type:
+        scalar: string
     - name: authorizationURL
       type:
         scalar: string
@@ -975,6 +1002,12 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
       default: ""
+    - name: issuerDomainNames
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
     - name: issuerRef
       type:
         namedType: com.github.cert-manager.cert-manager.pkg.apis.meta.v1.IssuerReference

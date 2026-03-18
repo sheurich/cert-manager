@@ -571,25 +571,37 @@ type Challenge struct {
 	// where the client must send additional data for the server to validate
 	// the challenge.
 	Payload json.RawMessage
+
+	// IssuerDomainNames contains the issuer domain names for dns-persist-01 challenges.
+	IssuerDomainNames []string
+
+	// AccountURI is the account URI from the dns-persist-01 challenge object.
+	// The CA communicates this so the client can verify it identifies the same
+	// account. If empty, callers should fall back to the issuer's ACME status URI.
+	AccountURI string
 }
 
 // wireChallenge is ACME JSON challenge representation.
 type wireChallenge struct {
-	URL       string `json:"url"` // RFC
-	URI       string `json:"uri"` // pre-RFC
-	Type      string
-	Token     string
-	Status    string
-	Validated time.Time
-	Error     *wireError
+	URL              string   `json:"url"` // RFC
+	URI              string   `json:"uri"` // pre-RFC
+	Type             string
+	Token            string
+	Status           string
+	Validated        time.Time
+	Error            *wireError
+	IssuerDomainNames []string `json:"issuer-domain-names,omitempty"`
+	AccountURI        string   `json:"accounturi,omitempty"`
 }
 
 func (c *wireChallenge) challenge() *Challenge {
 	v := &Challenge{
-		URI:    c.URL,
-		Type:   c.Type,
-		Token:  c.Token,
-		Status: c.Status,
+		URI:               c.URL,
+		Type:              c.Type,
+		Token:             c.Token,
+		Status:            c.Status,
+		IssuerDomainNames: c.IssuerDomainNames,
+		AccountURI:        c.AccountURI,
 	}
 	if v.URI == "" {
 		v.URI = c.URI // c.URL was empty; use legacy

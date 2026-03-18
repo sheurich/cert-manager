@@ -32,11 +32,13 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
 	"github.com/cert-manager/cert-manager/pkg/acme"
 	acmecl "github.com/cert-manager/cert-manager/pkg/acme/client"
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	logf "github.com/cert-manager/cert-manager/pkg/logs"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
 	acmeapi "github.com/cert-manager/cert-manager/third_party/forked/acme"
 )
 
@@ -313,13 +315,20 @@ func (c *controller) finalize(ctx context.Context, ch *cmacme.Challenge) (err er
 
 	solver, err := c.solverFor(ch.Spec.Type)
 	if err != nil {
+		// dns-persist-01 CleanUp is a no-op, so if the feature gate was
+		// disabled after Challenge CRs were created, skip cleanup gracefully
+		// to allow finalizer removal.
+		if ch.Spec.Type == cmacme.ACMEChallengeTypeDNSPersist01 {
+			log.V(logf.DebugLevel).Info("skipping cleanup for dns-persist-01 challenge (feature gate may be disabled)")
+			return nil
+		}
 		log.Error(err, "error getting solver for challenge")
 		return err
 	}
 
 	err = solver.CleanUp(ctx, ch)
 	if err != nil {
-		err := fmt.Errorf("Error cleaning up challenge: %v", err)
+		err := fmt.Errorf("Error cleaning up challenge: %w", err)
 		c.recorder.Eventf(ch, corev1.EventTypeWarning, reasonCleanUpError, err.Error())
 		// stabilize the error message to avoid spurious updates which would
 		// cause repeated reconciles
@@ -467,6 +476,14 @@ func (c *controller) solverFor(challengeType cmacme.ACMEChallengeType) (solver, 
 		return c.httpSolver, nil
 	case cmacme.ACMEChallengeTypeDNS01:
 		return c.dnsSolver, nil
+	case cmacme.ACMEChallengeTypeDNSPersist01:
+		if !utilfeature.DefaultFeatureGate.Enabled(feature.ACMEDNSPersist01) {
+			return nil, fmt.Errorf("dns-persist-01 challenge type is not enabled (feature gate %s)", feature.ACMEDNSPersist01)
+		}
+		if c.dnsPersistSolver == nil {
+			return nil, fmt.Errorf("dns-persist-01 solver not initialized")
+		}
+		return c.dnsPersistSolver, nil
 	}
 	return nil, fmt.Errorf("no solver for %q implemented", challengeType)
 }

@@ -220,7 +220,7 @@ spec:
                       description: |-
                         An ACMEChallengeSolver describes how to solve ACME challenges for the issuer it is part of.
                         A selector may be provided to use different solving strategies for different DNS names.
-                        Only one of HTTP01 or DNS01 must be provided.
+                        Only one of HTTP01, DNS01, or DNSPersist01 must be provided.
                       properties:
                         dns01:
                           description: |-
@@ -753,6 +753,11 @@ spec:
                               - groupName
                               - solverName
                               type: object
+                          type: object
+                        dnsPersist01:
+                          description: |-
+                            Configures cert-manager to attempt to complete authorizations by
+                            performing the dns-persist-01 challenge flow.
                           type: object
                         http01:
                           description: |-

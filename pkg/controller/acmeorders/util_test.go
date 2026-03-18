@@ -25,12 +25,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	featuretesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/utils/ptr"
 	gwapi "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
 	acmecl "github.com/cert-manager/cert-manager/pkg/acme/client"
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
 	"github.com/cert-manager/cert-manager/test/unit/gen"
 )
 
@@ -503,7 +506,7 @@ func Test_ensureKeysForChallenges(t *testing.T) {
 	}
 	for name, scenario := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := ensureKeysForChallenges(scenario.acmeClient, scenario.partialChallenges)
+			got, err := ensureKeysForChallenges(scenario.acmeClient, scenario.partialChallenges, "")
 			if (err != nil) != scenario.wantErr {
 				t.Errorf("ensureKeysForChallenges() error = %v, wantErr %v", err, scenario.wantErr)
 				return
@@ -513,6 +516,163 @@ func Test_ensureKeysForChallenges(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("happy path dns-persist-01", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"letsencrypt.org"}
+		got, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.NoError(t, err)
+		assert.Equal(t, "letsencrypt.org; accounturi=https://acme.example/acct/1", got[0].Spec.Key)
+	})
+
+	t.Run("dns-persist-01 empty IssuerDomainNames", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = nil
+		_, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no issuer-domain-names")
+	})
+
+	t.Run("dns-persist-01 empty accountURI", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"letsencrypt.org"}
+		_, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "account URI")
+	})
+
+	t.Run("dns-persist-01 first entry empty, second valid", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"", "letsencrypt.org"}
+		got, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.NoError(t, err)
+		assert.Equal(t, "letsencrypt.org; accounturi=https://acme.example/acct/1", got[0].Spec.Key)
+	})
+
+	t.Run("dns-persist-01 all entries empty", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"", " "}
+		_, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no valid issuer-domain-names")
+	})
+
+	t.Run("dns-persist-01 trailing dot on issuer domain", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"letsencrypt.org."}
+		got, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.NoError(t, err)
+		assert.Equal(t, "letsencrypt.org; accounturi=https://acme.example/acct/1", got[0].Spec.Key)
+	})
+
+	t.Run("dns-persist-01 bare dot entry skipped", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{".", "letsencrypt.org"}
+		got, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.NoError(t, err)
+		assert.Equal(t, "letsencrypt.org; accounturi=https://acme.example/acct/1", got[0].Spec.Key)
+	})
+
+	t.Run("dns-persist-01 all bare dots", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{".", " . "}
+		_, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no valid issuer-domain-names")
+	})
+
+	t.Run("dns-persist-01 feature gate disabled", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, false)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"letsencrypt.org"}
+		_, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "feature gate not enabled")
+	})
+
+	t.Run("dns-persist-01 prefers challenge accounturi over issuer", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"letsencrypt.org"}
+		ch.Spec.AccountURI = "https://acme.example/acct/challenge"
+		got, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/issuer")
+		require.NoError(t, err)
+		assert.Equal(t, "letsencrypt.org; accounturi=https://acme.example/acct/challenge", got[0].Spec.Key)
+	})
+
+	t.Run("dns-persist-01 falls back to issuer URI when challenge has none", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		ch := gen.ChallengeFrom(fooChallenge,
+			gen.SetChallengeType(cmacme.ACMEChallengeTypeDNSPersist01),
+		)
+		ch.Spec.IssuerDomainNames = []string{"letsencrypt.org"}
+		ch.Spec.AccountURI = ""
+		got, err := ensureKeysForChallenges(basicACMEClient, []*cmacme.Challenge{ch}, "https://acme.example/acct/1")
+		require.NoError(t, err)
+		assert.Equal(t, "letsencrypt.org; accounturi=https://acme.example/acct/1", got[0].Spec.Key)
+	})
+}
+
+func Test_challengeType(t *testing.T) {
+	t.Run("dns-persist-01 with gate enabled", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		got, err := challengeType("dns-persist-01")
+		require.NoError(t, err)
+		assert.Equal(t, cmacme.ACMEChallengeTypeDNSPersist01, got)
+	})
+
+	t.Run("dns-persist-01 with gate disabled", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, false)
+		_, err := challengeType("dns-persist-01")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "feature gate not enabled")
+	})
+
+	t.Run("http-01", func(t *testing.T) {
+		got, err := challengeType("http-01")
+		require.NoError(t, err)
+		assert.Equal(t, cmacme.ACMEChallengeTypeHTTP01, got)
+	})
+
+	t.Run("dns-01", func(t *testing.T) {
+		got, err := challengeType("dns-01")
+		require.NoError(t, err)
+		assert.Equal(t, cmacme.ACMEChallengeTypeDNS01, got)
+	})
+
+	t.Run("unsupported type", func(t *testing.T) {
+		_, err := challengeType("unknown-99")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported challenge type")
+	})
 }
 
 func TestBuildChallengeSpecFromOrder_ParentRefAnnotations(t *testing.T) {

@@ -23,8 +23,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	"github.com/cert-manager/cert-manager/internal/controller/feature"
 	cmacme "github.com/cert-manager/cert-manager/pkg/apis/acme/v1"
 	cmapi "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	utilfeature "github.com/cert-manager/cert-manager/pkg/util/feature"
+	featuretesting "k8s.io/component-base/featuregate/testing"
 )
 
 func TestPick(t *testing.T) {
@@ -991,4 +994,122 @@ func TestPick(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPick_DNSPersist01(t *testing.T) {
+	emptySelectorSolverDNSPersist := cmacme.ACMEChallengeSolver{
+		DNSPersist01: &cmacme.ACMEChallengeSolverDNSPersist01{},
+	}
+	acmeChallengeDNSPersist01 := &cmacme.ACMEChallenge{
+		Type:              "dns-persist-01",
+		Token:             "dns-persist-01-token",
+		IssuerDomainNames: []string{"letsencrypt.org"},
+	}
+	baseOrder := &cmacme.Order{ObjectMeta: metav1.ObjectMeta{Name: "test"}}
+
+	t.Run("dns-persist-01 matched when gate enabled", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		issuer := &cmapi.Issuer{
+			Spec: cmapi.IssuerSpec{
+				IssuerConfig: cmapi.IssuerConfig{
+					ACME: &cmacme.ACMEIssuer{
+						Solvers: []cmacme.ACMEChallengeSolver{emptySelectorSolverDNSPersist},
+					},
+				},
+			},
+		}
+		authz := &cmacme.ACMEAuthorization{
+			Identifier: "example.com",
+			Challenges: []cmacme.ACMEChallenge{*acmeChallengeDNSPersist01},
+		}
+		solver, ch := Pick(t.Context(), "example.com", authz.Challenges, issuer.GetSpec().ACME.Solvers, baseOrder)
+		if solver == nil {
+			t.Fatal("expected solver to be selected, got nil")
+		}
+		if ch == nil {
+			t.Fatal("expected challenge to be selected, got nil")
+		}
+		if ch.Type != "dns-persist-01" {
+			t.Errorf("expected challenge type dns-persist-01, got %s", ch.Type)
+		}
+	})
+
+	t.Run("dns-persist-01 not matched when gate disabled", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, false)
+		issuer := &cmapi.Issuer{
+			Spec: cmapi.IssuerSpec{
+				IssuerConfig: cmapi.IssuerConfig{
+					ACME: &cmacme.ACMEIssuer{
+						Solvers: []cmacme.ACMEChallengeSolver{emptySelectorSolverDNSPersist},
+					},
+				},
+			},
+		}
+		authz := &cmacme.ACMEAuthorization{
+			Identifier: "example.com",
+			Challenges: []cmacme.ACMEChallenge{*acmeChallengeDNSPersist01},
+		}
+		solver, ch := Pick(t.Context(), "example.com", authz.Challenges, issuer.GetSpec().ACME.Solvers, baseOrder)
+		if solver != nil {
+			t.Errorf("expected nil solver when gate disabled, got %v", solver)
+		}
+		if ch != nil {
+			t.Errorf("expected nil challenge when gate disabled, got %v", ch)
+		}
+	})
+
+	t.Run("dns-persist-01 solver nil returns no match", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		// Solver has HTTP01 configured but challenge is dns-persist-01
+		httpSolver := cmacme.ACMEChallengeSolver{
+			HTTP01: &cmacme.ACMEChallengeSolverHTTP01{
+				Ingress: &cmacme.ACMEChallengeSolverHTTP01Ingress{Name: "test"},
+			},
+		}
+		issuer := &cmapi.Issuer{
+			Spec: cmapi.IssuerSpec{
+				IssuerConfig: cmapi.IssuerConfig{
+					ACME: &cmacme.ACMEIssuer{
+						Solvers: []cmacme.ACMEChallengeSolver{httpSolver},
+					},
+				},
+			},
+		}
+		authz := &cmacme.ACMEAuthorization{
+			Identifier: "example.com",
+			Challenges: []cmacme.ACMEChallenge{*acmeChallengeDNSPersist01},
+		}
+		solver, ch := Pick(t.Context(), "example.com", authz.Challenges, issuer.GetSpec().ACME.Solvers, baseOrder)
+		if solver != nil {
+			t.Errorf("expected nil solver when no dns-persist-01 solver configured, got %v", solver)
+		}
+		if ch != nil {
+			t.Errorf("expected nil challenge, got %v", ch)
+		}
+	})
+
+	t.Run("dns-persist-01 selected over http-01 when both present", func(t *testing.T) {
+		featuretesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, feature.ACMEDNSPersist01, true)
+		issuer := &cmapi.Issuer{
+			Spec: cmapi.IssuerSpec{
+				IssuerConfig: cmapi.IssuerConfig{
+					ACME: &cmacme.ACMEIssuer{
+						Solvers: []cmacme.ACMEChallengeSolver{emptySelectorSolverDNSPersist},
+					},
+				},
+			},
+		}
+		acmeChallengeHTTP01 := cmacme.ACMEChallenge{Type: "http-01", Token: "http-token"}
+		authz := &cmacme.ACMEAuthorization{
+			Identifier: "example.com",
+			Challenges: []cmacme.ACMEChallenge{acmeChallengeHTTP01, *acmeChallengeDNSPersist01},
+		}
+		solver, ch := Pick(t.Context(), "example.com", authz.Challenges, issuer.GetSpec().ACME.Solvers, baseOrder)
+		if solver == nil {
+			t.Fatal("expected solver, got nil")
+		}
+		if ch == nil || ch.Type != "dns-persist-01" {
+			t.Errorf("expected dns-persist-01 challenge selected, got %v", ch)
+		}
+	})
 }

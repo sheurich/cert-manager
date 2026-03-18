@@ -60,6 +60,12 @@ spec:
             type: object
           spec:
             properties:
+              accountURI:
+                description: |-
+                  AccountURI is the account URI from the dns-persist-01 challenge object.
+                  The CA communicates this so the client can verify it identifies the same
+                  account. If empty, callers should fall back to the issuer's ACME status URI.
+                type: string
               authorizationURL:
                 description: |-
                   The URL to the ACME Authorization resource that this
@@ -71,6 +77,16 @@ spec:
                   If the requested DNSName is a 'wildcard', this field MUST be set to the
                   non-wildcard domain, e.g., for `*.example.com`, it must be `example.com`.
                 type: string
+              issuerDomainNames:
+                description: |-
+                  IssuerDomainNames carries the issuer-domain-names from the ACME server
+                  for dns-persist-01 challenges.
+                items:
+                  maxLength: 253
+                  type: string
+                maxItems: 10
+                type: array
+                x-kubernetes-list-type: atomic
               issuerRef:
                 description: |-
                   References a properly configured ACME-type Issuer which should
@@ -104,6 +120,9 @@ spec:
                   For DNS01 challenges, this is the base64 encoded SHA256 sum of the
                   `<private key JWK thumbprint>.<key from acme server for challenge>`
                   text that must be set as the TXT record content.
+                  For DNS-Persist-01 challenges, this is the expected TXT record value in
+                  RFC 8659 issue-value syntax:
+                  `<issuer-domain-name>; accounturi=<account-URI>`.
                 type: string
               solver:
                 description: |-
@@ -637,6 +656,11 @@ spec:
                         - groupName
                         - solverName
                         type: object
+                    type: object
+                  dnsPersist01:
+                    description: |-
+                      Configures cert-manager to attempt to complete authorizations by
+                      performing the dns-persist-01 challenge flow.
                     type: object
                   http01:
                     description: |-
@@ -3420,10 +3444,11 @@ spec:
               type:
                 description: |-
                   The type of ACME challenge this resource represents.
-                  One of "HTTP-01" or "DNS-01".
+                  One of "HTTP-01", "DNS-01", or "DNS-Persist-01".
                 enum:
                 - HTTP-01
                 - DNS-01
+                - DNS-Persist-01
                 type: string
               url:
                 description: |-
